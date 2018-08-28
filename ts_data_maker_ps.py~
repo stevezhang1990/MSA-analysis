@@ -1,0 +1,30 @@
+import os
+import numpy as np
+from get_intmap import *
+import glob
+from netCDF4 import Dataset
+from scipy import *
+from pylab import *
+
+infile00 = Dataset('/users/jk/16/xzhang/gcadj_std_M_V35/runs/v8-02-01/geos5_mop_1601/ctm.01.20160101.nc')
+len_lat,len_lon = shape(infile00.variables["CHEM-L_S__OH"][0,:,:])
+path = '/data/ctm/GEOS_4x5/GEOS_FP/'
+year = str(2016)
+month_counter=np.array([31,29,31,30,31,30,31,31,30,31,30,31])
+ps = np.zeros((24*366,len_lat,len_lon))
+for i in range(12):
+   for j in range(month_counter[i]):
+      month = str(i+1).zfill(2)
+      day = str(j+1).zfill(2)
+      filename = path+year+'/'+month+'/'+'GEOSFP.'+year+month+day+'.I3.4x5.nc'
+      #print filename
+      infile = Dataset(filename)
+      for k in range(24):
+         day_counter = np.sum(month_counter[0:i])+j
+         I3_i = int(k/3)
+         ts_i = k + 24*day_counter
+         #print ts_i
+         ps[ts_i,:,:] = infile.variables["PS"][I3_i,:,:]
+      
+np.save('/users/jk/15/xzhang/TS_annual/geos5_ap_2016/ts_ps_2016.npy',ps)
+print "done"

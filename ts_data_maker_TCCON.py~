@@ -1,0 +1,65 @@
+#!/usr/bin/python
+from scipy import *
+from pylab import *
+from netCDF4 import Dataset
+import glob
+import os
+from get_intmap import *
+    
+file_count = 0
+ap_corr = 1.0672
+infile00 = Dataset('/users/jk/16/xzhang/gcadj_std_M_V35/runs/v8-02-01/geos5_mop_1601/ctm.01.20160101.nc')
+len_lat, len_lon = shape(infile00.variables["DXYP__DXYP"][0,:,:])
+lon_gc = infile00.variables["LON"][:]
+lat_gc = infile00.variables["LAT"][:]
+filename = '/users/jk/15/xzhang/TCCON/tccon_2016.npz'
+with load(filename) as data_tccon:
+    lon_obs,lat_obs = data_tccon["grid_info"]
+    sza = data_tccon["co_info"][:,0,:]
+    co_col_obs = data_tccon["co_info"][:,1,:]
+    co_ak = data_tccon["co_ak_info"][:,0:71,:]
+    sza_ak = data_tccon["co_ak_info"][:,71,:]
+    prior_height = data_tccon["height_info"][:,0,:]
+    p_ak = data_tccon["height_info"][:,1,:]
+    co_ap = data_tccon["co_ap_info"][:,0,:,:]
+    pres_ap = data_tccon["co_ap_info"][:,1,:,:]
+
+len_site,len_time = shape(sza)
+len_akz = len(sza_ak[0,:])
+len_time_ap, len_p = len(co_ap[0,:,:])
+
+len_spec = 3
+data_filt = np.zeros((len_time,len_lat,len_lon,len_spec))
+mon_counter = np.array([31,29,31,30,31,30,31,31,30,31,30,31])
+data_gc = np.load('/users/jk/15/xzhang/TS_annual/geos5_ap_2016/ts_ap_2016.npy')
+CO_gc_annual = data_gc[:,0,:,:,:]
+len_mod_lvl = len(CO_gc_annual[0,:,0,0])
+for i in range(len_site):
+    lat_i,lon_j = get_gc_ij(lat_obs[i],lon_obs[i])
+    ii = int(i/24)
+    for j in range(len_time):
+        if co_col_obs[i,j] > 0:
+            gc_co = np.zeros(len_p)
+            co_apc = np.zeros(len_p)
+            co_pert = np.zeros(len_p)
+            co_hat = 0
+            gc_co_native = CO_gc_annual[i,:,lat_i,lon_j]
+            mod_p0 = gc_pressure[ii,0,lat_i,lon_j]
+            mod_pc = gc_pressure[ii,:,lat_i,lon_j]
+            obs_pc = pres_ap[i,j,k]
+            obs_p0 = pres_ap[i,j,0]
+            MAP = get_intmap(len_mod_lvl,mod_pc,mod_p0,len_p,obs_pc,obs_p0)
+            for k in range(len_p):
+                gc_co[k] = 0
+                for kk in range(len_mod_lvl):
+                      gc_co[k] = gc_co[k] + MAP[kk,k]*gc_co_native[kk]  
+            for k in range(len_p):
+                co_apc[k] = 1.0672*co_ap[ii,k]
+                co_pert[k] = gc_co[k] - co_apc[k]
+            for k in range(len_p):
+                co_hat = co_hat + pwt*co_apc[k] + pwt*co_ak[ii,k,n]*co_pert[k]
+
+
+np.save('/users/jk/15/xzhang/AQS/aqs_gc_2016.npy',data_filt)
+print "done"
+show()

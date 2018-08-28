@@ -1,0 +1,37 @@
+import os
+import numpy as np
+from get_intmap import *
+from netCDF4 import Dataset
+from scipy import *
+from pylab import *
+
+infile00 = Dataset('/users/jk/16/xzhang/gcadj_std_M_V35/runs/v8-02-01/geos5_mop_1601/ctm.01.20160101.nc')
+lon_gc = infile00.variables["LON"][:]
+lat_gc = infile00.variables["LAT"][:]
+ts_sp = np.load('/users/jk/15/xzhang/TS_annual/geos5_ap_2016/ts_ps_2016.npy')
+len_time,len_lat,len_lon = shape(ts_sp)
+model_hour=24
+len_lvl = 47
+mon_counter=np.array([31,29,31,30,31,30,31,31,30,31,30,31])
+p_edge = np.zeros((len_time,len_lvl+1,len_lat,len_lon))
+p_center = np.zeros((len_time,len_lvl,len_lat,len_lon))
+
+for i in range(len_time):
+   p_edge[i,:,:,:] = geos5_pressure(lat_gc,lon_gc,ts_sp[i,:,:])
+   for j in range(len_lvl):
+      p_center[i,j,:,:] = 0.5*(p_edge[i,j,:,:]+p_edge[i,j+1,:,:])
+print "check"
+path = '/users/jk/15/xzhang/TS_annual/geos5_ap_2016/'
+filename = 'ts_pres_2016'
+dataset = Dataset(path+filename+'.nc','w',format='NETCDF4_CLASSIC')
+level_edge = dataset.createDimension('level_edge',len_lvl+1)
+level_center = dataset.createDimension('level_center',len_lvl)
+lat = dataset.createDimension('lat',len_lat)
+lon = dataset.createDimension('lon',len_lon)
+time = dataset.createDimension('time',len_time)
+ts_pc = dataset.createVariable('ts_p_center',np.float32,('time','level_center','lat','lon'))
+ts_pc[:,:,:,:] = p_center[:,:,:,:]
+ts_edge = dataset.createVariable('ts_p_edge',np.float32,('time','level_edge','lat','lon'))
+ts_edge[:,:,:,:] = p_edge[:,:,:,:]
+dataset.close()
+print "done"
