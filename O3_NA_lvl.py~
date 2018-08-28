@@ -1,0 +1,117 @@
+#!/usr/bin/python
+from scipy import *
+from pylab import *
+from netCDF4 import Dataset
+import glob
+import os
+from matplotlib.colors import LogNorm
+from geos_interpolate import geos_interpolate
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.pyplot as plt
+from mpl_toolkits.basemap import Basemap, addcyclic
+
+file_count = 0
+infile00 = Dataset('/users/jk/16/xzhang/gcadj_std_M_V35/runs/v8-02-01/geos5_mop_1601/ctm.01.20160101.nc')
+ts_ap = Dataset('/users/jk/16/xzhang/TS_annual/geos5_ap_msa1/ts_ap_msa1.nc')
+ts_mop = Dataset('/users/jk/16/xzhang/TS_annual/geos5_mop_msa1/ts_mop_msa1.nc')
+ts_msa05 = Dataset('/users/jk/16/xzhang/TS_annual/geos5_all_05_msa1/ts_all_05_msa1.nc')
+#ts_msa06 = Dataset('/users/jk/15/xzhang/TS_annual/geos5_all_06_2016/ts_all_06_2016.nc')
+aqs_data = Dataset('/users/jk/16/xzhang/AQS/aqs_gc_2010.nc')
+mon_counter=np.array([31,29,31,30,31,30,31,31,30,31,30,31])
+#len1_time = np.sum(mon_counter[0:4])*24
+len_time,len_lat_NA,len_lon_NA = shape(aqs_data.variables["ts_o3_aqs"][:,:,:])
+ts_species = np.zeros((4,len_time,len_lat_NA,len_lon_NA))
+lat_ini = 25
+lat_fin = 41
+lon_ini = 8
+lon_fin = 25
+time_mid = 13*24
+bond=20
+#ts_species[0,1,:,:,:] = ts_ap.variables["ts_co"][0:len1_time,0,lat_ini:lat_fin,lon_ini:lon_fin]
+#ts_species[1,1,:,:,:] = ts_mop.variables["ts_co"][0:len1_time,0,lat_ini:lat_fin,lon_ini:lon_fin]
+#ts_species[2,1,:,:,:] = ts_msa05.variables["ts_co"][0:len1_time,0,lat_ini:lat_fin,lon_ini:lon_fin]
+#ts_species[3,1,:,:,:] = ts_msa06.variables["ts_co"][0:len1_time,0,lat_ini:lat_fin,lon_ini:lon_fin]
+#ts_species[4,1,:,:,:] = aqs_data.variables["ts_co_aqs"][0:len1_time,:,:]
+ts_species[0,:,:,:] = ts_ap.variables["ts_o3"][time_mid:,0,lat_ini:lat_fin,lon_ini:lon_fin]
+ts_species[1,:,:,:] = ts_mop.variables["ts_o3"][time_mid:,0,lat_ini:lat_fin,lon_ini:lon_fin]
+ts_species[2,:,:,:] = ts_msa05.variables["ts_o3"][time_mid:,0,lat_ini:lat_fin,lon_ini:lon_fin]
+#ts_species[3,0,:,:,:] = ts_msa06.variables["ts_o3"][0:len1_time,0,lat_ini:lat_fin,lon_ini:lon_fin]
+ts_species[3,:,:,:] = aqs_data.variables["ts_o3_aqs"][:,:,:]
+#ts_species[0,2,:,:,:] = ts_ap.variables["ts_no2"][0:len1_time,0,lat_ini:lat_fin,lon_ini:lon_fin]
+#ts_species[1,2,:,:,:] = ts_mop.variables["ts_no2"][0:len1_time,0,lat_ini:lat_fin,lon_ini:lon_fin]
+#ts_species[2,2,:,:,:] = ts_msa05.variables["ts_no2"][0:len1_time,0,lat_ini:lat_fin,lon_ini:lon_fin]
+#ts_species[3,2,:,:,:] = ts_msa06.variables["ts_no2"][0:len1_time,0,lat_ini:lat_fin,lon_ini:lon_fin]
+#ts_species[4,2,:,:,:] = aqs_data.variables["ts_no2_aqs"][0:len1_time,:,:]
+ts_species_filt = np.ma.masked_where(abs(ts_species == 0), ts_species)
+ts_species_mean = np.mean(ts_species_filt,axis=1)
+ts_species_mean = np.ma.masked_where(abs(ts_species_mean == 0), ts_species_mean)
+lon_gc = infile00.variables["LON"][lon_ini:lon_fin]
+lat_gc = infile00.variables["LAT"][lat_ini:lat_fin]
+fig = plt.figure(1,figsize=(12,7.5))
+ax = plt.subplot(221)
+title(r'Surface O$_3$ AQS July-2010[ppbv]')
+plot_data1 = ts_species_mean[3,:,:]
+plot_data, lon_gc = addcyclic(plot_data1[:,:],lon_gc)
+m1=Basemap(lon_0=-90,llcrnrlat=10,urcrnrlat=60,llcrnrlon=-140,urcrnrlon=-60)
+m1.drawcoastlines()
+m1.drawparallels(arange(0,90,10),labels=[1,0,0,1],labelstyle="+/-")
+m1.drawmeridians(arange(-180,0,30),labels=[1,0,0,1],labelstyle="+/-")
+x,y = m1(*np.meshgrid(lon_gc,lat_gc))
+#For ozone March 0-100 Nov 10-80
+anth_plot = m1.pcolormesh(x,y,plot_data,vmin=0,vmax=50)
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("bottom", size="7%", pad=0.3)
+plt.colorbar(orientation = 'horizontal',cax=cax)
+anth_plot.cmap.set_bad('lightgrey')
+ax = plt.subplot(222)
+title(r'O$_3$ comparison for a priori')
+plot_data = 0.98*ts_species_mean[0,:,:] - ts_species_mean[3,:,:]
+print np.mean(plot_data[:,:9]),np.mean(plot_data[:,9:])
+m1=Basemap(lon_0=-90,llcrnrlat=10,urcrnrlat=60,llcrnrlon=-140,urcrnrlon=-60)
+m1.drawcoastlines()
+m1.drawparallels(arange(0,90,10),labels=[1,0,0,1],labelstyle="+/-")
+m1.drawmeridians(arange(-180,0,30),labels=[1,0,0,1],labelstyle="+/-")
+x,y = m1(*np.meshgrid(lon_gc,lat_gc))
+#For ozone March 0-100 Nov 10-80
+anth_plot = m1.pcolormesh(x,y,plot_data,vmin=-bond,vmax=bond,cmap=get_cmap("RdBu_r"))
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("bottom", size="7%", pad=0.3)
+plt.colorbar(orientation = 'horizontal',cax=cax)
+anth_plot.cmap.set_bad('lightgrey')
+ax = plt.subplot(223)
+title(r'O$_3$ comparison for TES and OSIRIS')
+plot_data = 0.97*ts_species_mean[1,:,:] - ts_species_mean[3,:,:]
+m1=Basemap(lon_0=-90,llcrnrlat=10,urcrnrlat=60,llcrnrlon=-140,urcrnrlon=-60)
+m1.drawcoastlines()
+m1.drawparallels(arange(0,90,10),labels=[1,0,0,1],labelstyle="+/-")
+m1.drawmeridians(arange(-180,0,30),labels=[1,0,0,1],labelstyle="+/-")
+x,y = m1(*np.meshgrid(lon_gc,lat_gc))
+#For ozone March 0-100 Nov 10-80
+anth_plot = m1.pcolormesh(x,y,plot_data,vmin=-bond,vmax=bond,cmap=get_cmap("RdBu_r"))
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("bottom", size="7%", pad=0.3)
+plt.colorbar(orientation = 'horizontal',cax=cax)
+anth_plot.cmap.set_bad('lightgrey')
+ax = plt.subplot(224)
+title(r'O$_3$ comparison for all instrument')
+plot_data = 0.9*ts_species_mean[2,:,:] - ts_species_mean[3,:,:]
+print np.mean(plot_data[:,:9]),np.mean(plot_data[:,9:])
+ts_species_mask = np.ma.masked_where(ts_species_mean<5,ts_species_mean)
+o3_west = ts_species_mask[3,:,:9]
+o3_east = ts_species_mask[3,:,9:]
+do3_west = 100*(0.9*ts_species_mask[2,:,:9]-0.98*ts_species_mask[0,:,:9])/o3_west
+do3_east = 100*(0.9*ts_species_mask[2,:,9:]-0.98*ts_species_mask[0,:,9:])/o3_east
+
+m1=Basemap(lon_0=-90,llcrnrlat=10,urcrnrlat=60,llcrnrlon=-140,urcrnrlon=-60)
+m1.drawcoastlines()
+m1.drawparallels(arange(0,90,10),labels=[1,0,0,1],labelstyle="+/-")
+m1.drawmeridians(arange(-180,0,30),labels=[1,0,0,1],labelstyle="+/-")
+x,y = m1(*np.meshgrid(lon_gc,lat_gc))
+#For ozone March 0-100 Nov 10-80
+anth_plot = m1.pcolormesh(x,y,plot_data,vmin=-bond,vmax=bond,cmap=get_cmap("RdBu_r"))
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("bottom", size="7%", pad=0.3)
+plt.colorbar(orientation = 'horizontal',cax=cax)
+anth_plot.cmap.set_bad('lightgrey')
+print "done"
+show()

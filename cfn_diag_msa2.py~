@@ -1,0 +1,55 @@
+#!/usr/bin/python
+from scipy import *
+from pylab import *
+from mpl_toolkits.basemap import Basemap
+from netCDF4 import Dataset
+from matplotlib.colors import LogNorm
+from geos_interpolate import geos_interpolate
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.pyplot as plt
+import numpy as np
+
+cfn_iasio3 = loadtxt('/users/jk/15/xzhang/gcadj_std_T_3d/runs/v8-02-01/geos5_all_1608_05/diagadj/cfn_iasio3.01.m'
+                     , dtype = float)
+cfn_mopitt = loadtxt('/users/jk/15/xzhang/gcadj_std_T_3d/runs/v8-02-01/geos5_all_1608_05/diagadj/cfn_mop.01.m'
+                     , dtype = float)
+cfn_omino2 = loadtxt('/users/jk/15/xzhang/gcadj_std_T_3d/runs/v8-02-01/geos5_all_1608_05/diagadj/cfn_omino2.01.m'
+                     , dtype = float)
+cfn_osi = loadtxt('/users/jk/15/xzhang/gcadj_std_T_3d/runs/v8-02-01/geos5_all_1608_05/diagadj/cfn_osi.01.m'
+                     , dtype = float)
+cfn_mop = loadtxt('/users/jk/15/xzhang/gcadj_std_T_3d/runs/v8-02-01/geos5_all_1608_05/diagadj/cfn_mlshno3.01.m'
+                     , dtype = float)
+cfn_omi = loadtxt('/users/jk/15/xzhang/gcadj_std_T_3d/runs/v8-02-01/geos5_all_1608_05/diagadj/cfn_omich2o.01.m'
+                     , dtype = float)
+#cfn_iasico = loadtxt('/users/jk/15/xzhang/gcadj_std_T_3d/runs/v8-02-01/geos5_all_1608_3d_4/diagadj/cfn_iasico.01.m'
+                    # , dtype = float)
+#sobs_count_omi025 = loadtxt('/users/jk/06/xzhang/gcadj_std_T_V34//runs/v8-02-01/geos5_cf/diagadj/sobs_count_omi025no2.14.m'
+                     #, dtype = float)
+
+cfn_iasi_total = np.sum(cfn_iasio3)
+cfn_mop_total = np.sum(cfn_mopitt)
+cfn_omi_total = np.sum(cfn_omino2)
+cfn_osi_total = np.sum(cfn_osi)
+cfn_m2_total = np.sum(cfn_mop)
+cfn_o2_total = np.sum(cfn_omi)
+#cfn_iasico_total = np.sum(cfn_iasico)
+#sobs_count = np.mean(sobs_count_omi025)
+cfn_total = cfn_iasi_total+cfn_mop_total+cfn_omi_total+cfn_osi_total+cfn_m2_total+cfn_o2_total#+cfn_iasico_total
+#cfn_total = cfn_mop_total+cfn_omi_total+cfn_o2_total+cfn_iasi_total
+print 100*cfn_iasi_total/cfn_total #iasi o3
+print cfn_mop_total*100/cfn_total # mop co
+print cfn_omi_total*100/cfn_total # omi no2
+print cfn_osi_total*100/cfn_total # osiris o3
+print cfn_m2_total*100/cfn_total #mls hno3
+print cfn_o2_total*100/cfn_total #omi ch2o
+#print cfn_iasico_total*100/cfn_total #iasi co
+
+print cfn_iasi_total
+print cfn_mop_total
+print cfn_omi_total
+print cfn_osi_total
+print cfn_m2_total
+print cfn_o2_total
+#print cfn_iasico_total
+
+print cfn_total

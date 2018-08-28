@@ -1,0 +1,161 @@
+#!/usr/bin/python
+from scipy import *
+from pylab import *
+from mpl_toolkits.basemap import Basemap, addcyclic
+from netCDF4 import Dataset
+from matplotlib.colors import LogNorm
+from geos_interpolate import geos_interpolate
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.pyplot as plt
+import os
+# regional area indictor
+def draw_screen_mask( lat_mask, lon_mask, m):
+
+    lats = [lat_mask[0],lat_mask[-1],lat_mask[-1],lat_mask[0]]
+    lons = [lon_mask[0],lon_mask[0],lon_mask[-1],lon_mask[-1]]
+    x, y = m( lons, lats )
+    xy = zip(x,y)
+    poly = Polygon( xy, facecolor='blue', alpha=0.4 )
+    gca().add_patch(poly)
+# month of the year
+d2y = np.array([15,16,14,15,15,16,15,15,15,16,15,15,15,16,15,16,15,15,15,16,15,15,15,16])
+mon_counter = np.array([31,29,31,30,31,30,31,31,30,31,30,31])
+# sample file reading in lat, lon, and matrix dimensions
+infile00 = Dataset('/users/jk/15/xzhang/gcadj_std_T_3d/runs/v8-02-01/geos5_all_1608_AM/ctm.00.20160801.nc')
+lon = infile00.variables["LON"][:]
+lat = infile00.variables["LAT"][:]
+len1,len2,len3 = shape(infile00.variables["IJ-AVG-S__Ox"][:,:,:])
+# len4: # of exp len5: # of sub-assimilation
+len4 = 7
+len5 = 24
+spec = np.zeros((len4,5,len5,len1,len2,len3))
+spec_crt = np.zeros((len4,5,len5,5,len2,len3))
+# pre-define 3 critical vertical levels
+pre_crt = np.array([800,500,300])
+# surface pressure
+ps = infile00.variables["DAO-FLDS__PS-PBL"][0,:,:]
+# lists of string on file entries
+sysdir = ['/users/jk/16/xzhang/','/users/jk/15/xzhang/']
+codedir = ['gcadj_std_M_V35/','gcadj_std_M_V35/','gcadj_std_O_3d','gcadj_std_O_V35','gcadj_std_M_SOB','gcadj_std_T_3d','gcadj_std_I_3d']
+runbuffer = '/runs/v8-02-01/'
+rundir = ['geos5_ap_2016','geos5_mop_16','geos5_omino2_16','geos5_omh_16','geos5_iasio3_16','geos5_all_16','geos5_all_16']
+rundir2 = ['geos5_ap_2017','geos5_mop_17','geos5_omino2_17','geos5_omh_17','geos5_iasio3_17','geos5_all_17','geos5_all_17']
+sf_ind = ['10','10','10','20','20','20']
+# loop over all the experiments
+for j in range(len4):
+    for i in range(14):
+        month = str(i+1).zfill(2)
+        mondir1 = [month,month,month,month+'WC',month+'_07',month+'_08']
+        mondir2 = [str(i+21).zfill(2),str(i+21).zfill(2),str(i+21).zfill(2),str(i+21).zfill(2)+'WC',month+'_27',month+'_28']
+        if i<12:
+            rund = rundir[j]
+            yeard = '.2016'
+        else:
+            rund = rundir2[j]
+            yeard = '.2017'
+        if j!=5:
+            sysd = sysdir[0]
+        else:
+            sysd = sysdir[1]
+        path = sysd+codedir[j]+runbuffer+rund
+        if j>0:
+            path_sf = path+mondir1[j-1]+'/ctm.'+sf_ind+yeard+month+'01.nc'
+            path_sf2 = path+mondir2[j-1]+'/ctm.'+sf_ind+yeard+month+'16.nc'
+            if os.path.isfile(path_sf) == False:
+                sf_ind = '15'
+                path_sf =  path+mondir1[j-1]+'/ctm.'+sf_ind+yeard+month+'01.nc'
+            if os.path.isfile(path_sf2) == False:
+                sf_ind = '15'
+                path_sf2 =  path+mondir2[j-1]+'/ctm.'+sf_ind+yeard+month+'16.nc'
+            spec_in = Dataset(path_sf)
+            spec_in2 = Dataset(path_sf2)
+            # 0: CO, 1: CH2O, 2: NO2, 3: O3, 4, OH
+        else:
+            path_ap = path+'/ctm.00'+yeard+month+'01.nc'
+            path_ap2 = path+'/ctm.00'+yeard+month+'16.nc'
+            spec_in = Dataset(path_ap)
+            spec_in2 = Dataset(path_ap2)
+        # read in modeled CO, CH2O, NO2, O3, and OH
+        spec[j,0,2*i,:,:,:] = spec_in.variables["IJ-AVG-S__CO"][:,:,:]
+        spec[j,0,2*i+1,:,:,:] = spec_in2.variables["IJ-AVG-S__CO"][:,:,:]
+        spec[j,1,2*i,:,:,:] = spec_in.variables["IJ-AVG-S__CH2O"][:,:,:]
+        spec[j,1,2*i+1,:,:,:] = spec_in2.variables["IJ-AVG-S__CH2O"][:,:,:]
+        spec[j,2,2*i,:38,:,:] = spec_in.variables["CHEM-L_S__NO2"][:,:,:]
+        spec[j,2,2*i+1,:38,:,:] = spec_in2.variables["CHEM-L_S__NO2"][:,:,:]
+        spec[j,3,2*i,:,:,:] = spec_in.variables["IJ-AVG-S__Ox"][:,:,:]
+        spec[j,3,2*i+1,:,:,:] = spec_in2.variables["IJ-AVG-S__Ox"][:,:,:]
+        spec[j,4,2*i,:38,:,:] = spec_in.variables["CHEM-L_S__OH"][:,:,:]
+        spec[j,4,2*i+1,:38,:,:] = spec_in2.variables["CHEM-L_S__OH"][:,:,:]
+        # convert altitude mean to isentropic mean on 3 critical levels
+        for m in range(3):
+            for k in range(5):
+                spec_crt[j,k,2*i,m,:,:] = geos_interpolate(len1,lat,lon,spec[j,k,2*i,:,:,:],ps,pre_crt[m])
+                pres, spec_crt[j,k,2*i+1,m,:,:] = geos_interpolate(len1,lat,lon,spec[j,k,2*i+1,:,:,:],ps,pre_crt[m],pre_output=True)
+            #spec_crt_mon[j,i,m,:,:] = np.mean(spec_crt[j,2*i:2*i+2,m,:,:],axis=0)
+#spec_crt_sea = np.zeros((len4,4,5,len2,len3))
+# compute mean statistics of modeled abundances
+spec_crt_mean = np.mean(spec_crt,axis=2)
+spec_mean = np.mean(spec,axis=2)
+spec_diff =  100*(spec_mean - spec_mean[0,:,:,:,:])/spec_mean[0,:,:,:,:]
+spec_diff[0,:,:,:,:] = spec_mean[0,:,:,:,:]
+spec_diff_zonal = np.mean(spec_diff,axis=4)
+spec_crt_diff = 100*(spec_crt_mean - spec_crt_mean[0,:,:,:,:])/spec_crt_mean[0,:,:,:,:]
+spec_crt_diff[0,:,:,:,:] = spec_crt_mean[0,:,:,:,:]
+#spec_crt_diff[5,:,:,:,:] = spec_crt_diff[6,:,:,:,:]
+#spec_crt_sea[:,0,:,:,:] = (2*np.mean(spec_crt[:,0:4,:,:,:],axis=1)+np.mean(spec_crt[:,22:24,:,:,:],axis=1))/3
+#spec_crt_sea[:,1,:,:,:] = np.mean(spec_crt[:,4:10,:,:,:],axis=1)
+#spec_crt_sea[:,2,:,:,:] = np.mean(spec_crt[:,10:16,:,:,:],axis=1)
+#spec_crt_sea[:,3,:,:,:] = np.mean(spec_crt[:,16:22,:,:,:],axis=1)
+#spec_crt_ts = np.zeros((len4,24,5,3))
+#spec_crt_ts[:,:,:,0] = np.mean(np.mean(spec_crt[:,:,:,4:15,:],axis=3),axis=3)
+#spec_crt_ts[:,:,:,1] = np.mean(np.mean(spec_crt[:,:,:,15:31,:],axis=3),axis=3)
+#spec_crt_ts[:,:,:,2] = np.mean(np.mean(spec_crt[:,:,:,31:42,:],axis=3),axis=3)
+#title2 = ['DJF ','MAM ','JJA ','SON ']
+title4 = ['CO','HCHO','NO2','O3','OH']
+title3 = ['CTRL','MOPITT','OMI NO2','OMI HCHO','IASI','All instrument']
+# plot the difference of the assimilation run and the CTRL run on the interested species
+for k in range(5):
+    for m in range(3):
+        figure(3*k+m+1,figsize=(15,7.5))
+        for j in range(6):
+            ax = subplot(231+j)
+            m1=Basemap(lon_0=0)
+            m1.drawcoastlines()
+            m1.drawparallels(arange(-90,120,30),labels=[1,0,0,1],labelstyle="+/-",fontsize=7)
+            m1.drawmeridians(arange(-180,210,60),labels=[1,0,0,1],labelstyle="+/-",fontsize=7)
+            if j==0 and k==0 and m==0:
+                plot_data, lon = addcyclic(spec_crt_diff[j,k,m,:,:],lon)
+                x,y = m1(*np.meshgrid(lon,lat))
+            else:
+                plot_data = spec_crt_diff[j,k,m,:,:]
+            spec_lim = 0.8*np.max(ma.masked_invalid(plot_data))
+            if j==0:
+                anth_plot = m1.pcolormesh(x,y,plot_data,vmin=1,vmax=spec_lim)
+                title(title4[k]+' '+str(pre_crt[m])+'hPa '+title3[j],fontsize=11)
+            else:
+                anth_plot = m1.pcolormesh(x,y,plot_data,vmin=-20,vmax=20,cmap=get_cmap("RdBu_r"))
+                title(title4[k]+' diff '+title3[j],fontsize=11)
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("bottom", size="7%", pad=0.3)
+            cbar=plt.colorbar(orientation = 'horizontal',cax=cax)
+            cbar.ax.tick_params(labelsize=8)
+            anth_plot.cmap.set_bad('lightgrey')
+z_len = 38
+y = np.mean(np.mean(pres[:38,:,:],axis=1),axis=1)
+delta = 4
+clevs = np.arange(-20,20,delta)
+# zonal vertical profile of the modeled abundances
+for k in range(5):
+    figure(k+16,figsize=(12,7.5))
+    for j in range(6):
+        ax = subplot(231+j)
+        plot_data = spec_diff_zonal[j,k,:38,:]
+        if j==0:
+            clevs_lim = np.linspace(0,0.8*np.max(ma.masked_invalid(plot_data)),len(clevs))
+            CS = contourf(lat,y,plot_data,clevs_lim,cmap=plt.cm.gnuplot2_r,animated=True,extend='both')
+        else:
+            CS = contourf(lat,y,plot_data,clevs,cmap=plt.cm.RdBu_r,animated=True,extend='both')
+        plt.title(title4[k]+' altitude vs latitude '+title3[j])
+        plt.colorbar(mappable=None, cax=None, ax=None)
+        plt.gca().invert_yaxis()
+show()

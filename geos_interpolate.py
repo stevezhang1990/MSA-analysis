@@ -1,0 +1,90 @@
+from scipy import *
+from scipy import interpolate
+import numpy as np
+from netCDF4 import Dataset
+#! Ap [hPa] and Bp for 47 tot_levels (48 edges)                                                                                                                                              
+AP_GEOS5 = array( [0.000000e+00, 4.804826e-02, 6.593752e+00, 1.313480e+01, 1.961311e+01, 2.609201e+01, 3.257081e+01, 3.898201e+01, 4.533901e+01, 5.169611e+01, 5.805321e+01, 6.436264e+01, 7.062198e+01, 7.883422e+01, 8.909992e+01, 9.936521e+01, 1.091817e+02, 1.189586e+02, 1.286959e+02, 1.429100e+02, 1.562600e+02, 1.696090e+02, 1.816190e+02, 1.930970e+02, 2.032590e+02, 2.121500e+02, 2.187760e+02, 2.238980e+02, 2.243630e+02, 2.168650e+02, 2.011920e+02, 1.769300e+02, 1.503930e+02, 1.278370e+02, 1.086630e+02, 9.236572e+01, 7.851231e+01, 5.638791e+01, 4.017541e+01, 2.836781e+01, 1.979160e+01, 9.292942e+00, 4.076571e+00, 1.650790e+00, 6.167791e-01, 2.113490e-01, 6.600001e-02, 1.000000e-02 ])
+                                                                                     
+BP_GEOS5 = array( [1.000000e+00, 9.849520e-01, 9.634060e-01, 9.418650e-01, 9.203870e-01, 8.989080e-01, 8.774290e-01, 8.560180e-01, 8.346609e-01, 8.133039e-01, 7.919469e-01, 7.706375e-01, 7.493782e-01, 7.211660e-01, 6.858999e-01, 6.506349e-01, 6.158184e-01, 5.810415e-01, 5.463042e-01, 4.945902e-01, 4.437402e-01, 3.928911e-01, 3.433811e-01, 2.944031e-01, 2.467411e-01, 2.003501e-01, 1.562241e-01, 1.136021e-01, 6.372006e-02, 2.801004e-02, 6.960025e-03, 8.175413e-09, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00] )
+
+
+AP_GEOS4 = array([  0.000000,   0.000000,  12.704939,  35.465965, 66.098427, 101.671654, 138.744400, 173.403183, 198.737839, 215.417526, 223.884689, 224.362869, 216.864929, 201.192093, 176.929993, 150.393005,127.837006, 108.663429,  92.365662,  78.512299, 56.387939,  40.175419,  28.367815,  19.791553, 9.292943,   4.076567,   1.650792,   0.616779, 0.211349,   0.066000,   0.010000 ])
+                                                                                     
+BP_GEOS4 = array([  1.000000,   0.985110,   0.943290,   0.867830, 0.764920,   0.642710,   0.510460,   0.378440, 0.270330,   0.183300,   0.115030,   0.063720, 0.028010,   0.006960,   0.000000,   0.000000, 0.000000,   0.000000,   0.000000,   0.000000, 0.000000,   0.000000,   0.000000,   0.000000, 0.000000,   0.000000,   0.000000,   0.000000, 0.000000,   0.000000,   0.000000 ])
+
+
+def geos_interpolate(tot_level,lat,lon,data,ps,pre0,geos5=True,pre_output=False):
+
+    p_center=zeros( (tot_level,len(lat),len(lon)) )
+    result = zeros((len(lat),len(lon)))
+
+    for i in range(len(lat)):
+        for j in range(len(lon)):
+            if(geos5==True):
+                p = AP_GEOS5 + ps[i,j]*BP_GEOS5
+            else:   
+                p = AP_GEOS4 + ps[i,j]*BP_GEOS4            
+            p_mean = (p[0:len(p)-1] + p[1:len(p)])/2.0
+            #f = interpolate.interp1d(p_mean[0:30][::-1],data[:,i,j][0:30][::-1])
+            #print f
+            p_center[:,i,j] = p_mean[0:tot_level]
+            if pre0 < 900:
+                count = 0
+                subdata = 0
+                for k in range(tot_level):
+                    if p_center[k,i,j] >= pre0 - 50 and p_center[k,i,j]<pre0+50:
+                        subdata = subdata+data[k,i,j]
+                        count = count + 1
+                if count > 0:
+                    result[i,j] = subdata/count
+            else:
+                result[i,j] = data[0,i,j]
+    if pre_output == True:
+        return p_center, result
+    else:
+        return result
+
+def trop_mwmean(tot_level,lat,lon,data,ps,pre_am=True,am=None,spec=None):
+    p_center=zeros( (tot_level,len(lat),len(lon)) )
+    data_filt = np.zeros_like(data)
+    AM_filt = np.zeros_like(data)
+    if pre_am==True:
+        infile01 = Dataset('/users/jk/15/xzhang/gcadj_std_T_3d/runs/v8-02-01/geos5_all_1608_AM/ctm.00.20160801.nc')
+        
+        AM = infile01.variables["BXHGHT-S__AD"][0:38,:,:]
+        lon = infile01.variables["LON"][:]
+        lat = infile01.variables["LAT"][:]
+    else:
+        infile01 = Dataset(am)
+        AM = infile01.variables["BXHGHT-S__AD"][0:38,:,:]
+        lon = infile01.variables["LON"][:]
+        lat = infile01.variables["LAT"][:]
+    for i in range(len(lat)):
+        for j in range(len(lon)):
+            p = AP_GEOS5 + ps[i,j]*BP_GEOS5
+            p_mean = (p[0:len(p)-1] + p[1:len(p)])/2.0
+            #f = interpolate.interp1d(p_mean[0:30][::-1],data[:,i,j][0:30][::-1])
+            #print f
+            p_center[:,i,j] = p_mean[0:tot_level]
+            for k in range(tot_level-1):
+                if abs(lat[i])<=32 and p_center[k,i,j]>=100 and p_center[k+1,i,j]<100:
+                    data_filt[:k+1,i,j] = data[:k+1,i,j]
+                    AM_filt[:k+1,i,j] = AM[:k+1,i,j]
+                elif abs(lat[i])>32 and p_center[k,i,j]>=200 and p_center[k+1,i,j]<200:
+                    data_filt[:k+1,i,j] = data[:k+1,i,j]
+                    AM_filt[:k+1,i,j] = AM[:k+1,i,j]
+    if spec=='OH':
+        result=np.sum(data_filt*AM_filt)/(1e5*np.sum(AM_filt))
+    else:
+        data_nzero = np.ma.masked_where(data_filt<=0,data_filt)
+        result = np.mean(data_nzero)
+    return result
+
+
+                    
+
+
+
+
+
+

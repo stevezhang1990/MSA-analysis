@@ -1,0 +1,88 @@
+#!/usr/bin/python
+from scipy import *
+from pylab import *
+from mpl_toolkits.basemap import Basemap, addcyclic
+from netCDF4 import Dataset
+from matplotlib.colors import LogNorm
+from geos_interpolate import geos_interpolate
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.pyplot as plt
+import os
+import glob
+#infile_ap = Dataset('/users/jk/06/xzhang/gcadj_std_T_V34/runs/v8-02-01/geos5_osio3_1107/ctm.01.20110701.nc')
+path = '/users/jk/16/xzhang/gcadj_std_O_NA/runs/v8-02-01/'
+infile00 = Dataset(path+'geos5_ap_0807_NA/ctm.00.20080701.nc')
+lat_gc = infile00.variables["LAT"][:]
+lon_gc = infile00.variables["LON"][:]
+len_lat = len(lat_gc)
+len_lon = len(lon_gc)
+NOx_ab = np.zeros((9,4,4,len_lat,len_lon))
+exp = ['1','2','3','4','5','6','7','8','9']
+exp2 = ['01','04','07','10','13','16','19','22','25']
+run_exp = ['ap_0807_NA','omi_0807_NA','omo_0807_NA','omo_0807_BC']
+surface = infile00.variables["DXYP__DXYP"][:,:] * (100**2) # cm^2
+molNOx = 6.022*10**23 / ( 14.0 )
+s2d = 60*60*24
+d2y=31
+for i in range(len(exp)):
+    for j in range(len(run_exp)):
+        if j==0:
+            spec_ap = Dataset(path+'geos5_'+run_exp[j]+'/ctm.00.200807'+exp2[i]+'.nc')
+        else:
+            spec_in = Dataset(path+'geos5_'+run_exp[j]+'_'+exp[i]+'/gctm.sf.05.200807'+exp2[i]+'.nc')
+            NOx_ab[i,j,2,:,:] = spec_in.variables["IJ-EMS-S__NOX_an"][:,:]
+            NOx_ab[i,j,3,:,:] = spec_in.variables["IJ-EMS-S__NOX_bb"][:,:]
+        NOx_ab[i,j,0,:,:] = spec_ap.variables["ANTHSRCE__NOx"][0,:,:]
+        NOx_ab[i,j,1,:,:] = spec_ap.variables["NOX-BIOB__NOx"][0,:,:]
+NOx_ab_mean = np.mean(NOx_ab,axis=0)
+NOx_ap = NOx_ab_mean[:,0,:,:]+NOx_ab_mean[:,1,:,:]
+a=2
+NOx_sf = np.zeros((4,len_lat,len_lon))
+NOx_sf[1,:,:] = 1+2*a*(NOx_ab_mean[1,2,:,:]+NOx_ab_mean[1,3,:,:]-2)
+NOx_sf[2,:,:] = 1+a*(NOx_ab_mean[2,2,:,:]+NOx_ab_mean[2,3,:,:]-2)
+NOx_sf[3,:,:] = 1+1.5*(NOx_ab_mean[3,2,:,:]+NOx_ab_mean[3,3,:,:]-2)
+NOx_ems = np.zeros((4,len_lat,len_lon))
+NOx_ems[0,:,:] = NOx_ap[0,:,:]
+NOx_ems[1,:,:] = NOx_ab_mean[1,0,:,:]*(1+2*a*(NOx_ab_mean[1,2,:,:]-1))+\
+                 NOx_ab_mean[1,1,:,:]*(1+2*a*(NOx_ab_mean[1,3,:,:]-1))
+NOx_ems[2,:,:] = NOx_ab_mean[2,0,:,:]*(1+a*(NOx_ab_mean[2,2,:,:]-1))+\
+                  NOx_ab_mean[2,1,:,:]*(1+a*(NOx_ab_mean[2,3,:,:]-1))
+NOx_ems[3,:,:] = NOx_ab_mean[3,0,:,:]*(1+1.7*(NOx_ab_mean[3,2,:,:]-1))+\
+                  NOx_ab_mean[3,1,:,:]*(1+1.7*(NOx_ab_mean[3,3,:,:]-1))
+
+sum_omo = np.zeros((4))
+for i in range(4):
+    sum_omo[i] = np.sum(NOx_ems[i,:,:]*surface)/molNOx*s2d*d2y/10**12
+print sum_omo
+title1 = ['A priori','OMI','OmO','OmO+IASI BC','Diff OmO+IASI BC with OMI','Diff OmO+IASI BC with OmO']
+fig = plt.figure(1,figsize=(12,7.5))
+for i in range(4):
+    ax = plt.subplot(221+i)
+    m1=Basemap(lon_0=-90,llcrnrlat=10,urcrnrlat=70,llcrnrlon=-140,urcrnrlon=-40)
+    m1.drawcoastlines()
+    m1.drawparallels(arange(0,90,10),labels=[1,0,0,1],labelstyle="+/-")
+    m1.drawmeridians(arange(-180,0,30),labels=[1,0,0,1],labelstyle="+/-")
+    if i==0:
+        plt.title(r'$NO_x$ emissions '+title1[i])
+        plot_data,lon_gc = addcyclic(NOx_ap[0,:,:],lon_gc)
+        x,y = m1(*np.meshgrid(lon_gc,lat_gc))
+        anth_plot = m1.pcolormesh(x,y,plot_data/1e10,vmin=0,vmax=50,cmap=get_cmap("gnuplot2_r"))
+    else:
+        plt.title(r'$NO_x$ SF '+title1[i])
+        if i<4:
+            plot_data = NOx_sf[i,:,:]
+            anth_plot = m1.pcolormesh(x,y,plot_data,vmin=0.5,vmax=1.5,cmap=get_cmap("bwr")) 
+        else:
+            if i==4:
+                plot_data = NOx_sf[3,:,:] - NOx_sf[1,:,:]
+            else:
+                plot_data = NOx_sf[3,:,:] - NOx_sf[2,:,:]
+            anth_plot = m1.pcolormesh(x,y,plot_data,vmin=-0.5,vmax=0.5,cmap=get_cmap("RdBu_r"))
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("bottom", size="7%", pad=0.3)
+    plt.colorbar(orientation = 'horizontal',cax=cax)
+    anth_plot.cmap.set_bad('lightgrey')
+    ax.text(0.05, 0.95,str(np.around(sum_omo[i],decimals=3))+' TgN/month',\
+            transform=ax.transAxes, fontsize=11, verticalalignment='top',\
+            bbox=dict(facecolor='white'))
+plt.show()

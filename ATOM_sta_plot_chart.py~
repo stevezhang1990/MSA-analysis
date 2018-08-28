@@ -1,0 +1,61 @@
+#!/usr/bin/python
+from scipy import *
+from pylab import *
+from mpl_toolkits.basemap import Basemap
+from netCDF4 import Dataset
+from matplotlib.colors import LogNorm
+from geos_interpolate import geos_interpolate
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.pyplot as plt
+import numpy as np
+#to plot the spaghetti, make sure you prepare a reshape file first.
+atom_file = ['atom1','atom2']
+file_i = 1
+dataset = np.load('/users/jk/15/xzhang/ATom/'+atom_file[file_i]+'_merged_reshape.npy')
+data2 = np.ma.masked_invalid(dataset)
+data = np.ma.masked_where(abs(data2)==0, data2)
+len1,len2,len3,len4,len5 = shape(data)
+spec_mean = np.zeros((len1,len2,3,len4,len5))
+spec_mean[:,:,0,:,:] = np.mean(data[:,:,15:60,:,:],axis=2)
+spec_mean[:,:,1,:,:] = np.mean(data[:,:,60:120,:,:],axis=2)
+spec_mean[:,:,2,:,:] = np.mean(data[:,:,120:165,:,:],axis=2)
+title1 = ['Atlantic ','Pacific ']
+title2 = ['OH','$O_3$','CO','HCHO','$NO_2$']
+altitude = np.arange(0,14000,200)
+marker2 = ['v','o','^']
+marker1 = ['k','b','g','r']
+exp_ind = np.array([[0,1,5],[0,2,5],[0,1,5],[0,4,5],[0,3,5]])
+block
+for j in range(len2):
+    for k in range(len5):
+        ax = subplot(251+2*len5+j)
+        title(r''+atom_file[file_i]+' '+title2[k]+' '+title[j])
+        for i in range(3):
+            print "yes"
+            #plot(spec_mean[0,j,,altitude,'k',
+        
+fig = plt.figure(1,figsize=(12,6.5))
+x_lat = np.arange(-90,90,4)
+wdt=1
+for i in range(len_spec):
+    for j in range(2):
+        if i==0:
+            ax = subplot(221+2*j)
+        else:
+            ax = subplot(222+2*j)
+        title(r'ATom-1 $O_3$ comparison, '+title1[i]+title2[j])
+        #p1 = plt.bar(x_lat,o3_gc[0,i,:,j],width=wdt,color='yellow')
+        #p2 = plt.bar(x_lat+1,o3_gc[1,i,:,j],width=wdt,color='pink')
+        #p3 = plt.bar(x_lat+2,o3_gc[2,i,:,j],width=wdt,color='green')
+        #p4 = plt.bar(x_lat+3,o3_gc[4,i,:,j],width=wdt,color='red')
+        plot(x_lat,o3_gc[0,i,:,j],'k+',x_lat,o3_gc[1,i,:,j],'-',\
+             x_lat,o3_gc[3,i,:,j],'-',x_lat,o3_gc[4,i,:,j],'ro',linewidth=2.0)
+        xlim([-75,90])
+        if j==0:
+            ylim([10,70])
+        else:
+            ylim([10,200])
+        if i==0 and j==0:
+            legend(('CTRL','IASI','All instrument','ATom'),loc='best',\
+                    borderpad=0.3,prop={'size':11},frameon=False)
+show()

@@ -1,0 +1,29 @@
+#!/usr/bin/python
+from scipy import *
+from pylab import *
+from netCDF4 import Dataset
+import glob
+import os
+
+file_count = 0
+infile00 = Dataset('/users/jk/16/xzhang/gcadj_std_M_V35/runs/v8-02-01/geos5_mop_1601/ctm.01.20160101.nc')
+len_lat, len_lon = shape(infile00.variables["DXYP__DXYP"][0,:,:])
+len_time = 24*366
+len_spec = 3
+data_filt = np.zeros((len_time,len_lat,len_lon,len_spec))
+mon_counter = np.array([31,29,31,30,31,30,31,31,30,31,30,31])
+path = '/users/jk/16/xzhang/gcadj_std_M_V35/runs/v8-02-01/geos5_ap_2016/ND49/'
+for filename in glob.glob(os.path.join(path, '*.npy')):
+    infile = np.load(filename)
+    len1,len2,len3,len4,len5 = shape(infile)
+    date_num0 = np.sum(mon_counter[0:file_count])
+    j = 24*date_num0
+    for i in range(len1):
+        data_filt[i+j,:,:,0] = infile[i,0,0,:,:]
+        data_filt[i+j,:,:,1] = infile[i,3,0,:,:]
+        data_filt[i+j,:,:,2] = infile[i,2,0,:,:]
+    file_count = file_count + 1
+
+np.save('/users/jk/15/xzhang/AQS/aqs_gc_2016.npy',data_filt)
+print "done"
+show()
